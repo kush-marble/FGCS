@@ -40,6 +40,7 @@ import kmlSlice from "./slices/kmlSlice"
 import logAnalyserSlice, {
   setPersistentColorMap,
 } from "./slices/logAnalyserSlice"
+import mavlinkDiscoverySlice from "./slices/mavlinkDiscoverySlice"
 import missionInfoSlice, {
   setAcceptanceRadius,
   setDefaultWaypointAltitude,
@@ -66,6 +67,7 @@ const rootReducer = combineSlices(
   ftpSlice,
   simulationParamsSlice,
   kmlSlice,
+  mavlinkDiscoverySlice,
 )
 
 export const store = configureStore({

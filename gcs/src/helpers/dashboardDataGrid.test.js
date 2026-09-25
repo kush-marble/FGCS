@@ -19,7 +19,6 @@ import {
   deriveDataGridSizeFromCount,
   normaliseSelectedDisplayTelemetry,
   resizeSelectedDisplayTelemetry,
-  resolveSelectedValue,
 } from "./dashboardDataGrid"
 
 const box = (boxId, selected) => ({
@@ -436,55 +435,5 @@ describe("estimateTextEmWidth", () => {
     expect(estimateTextEmWidth("")).toBe(0)
     expect(estimateTextEmWidth(null)).toBe(0)
     expect(estimateTextEmWidth(undefined)).toBe(0)
-  })
-})
-
-describe("resolveSelectedValue", () => {
-  it("reads the field off a matching message", () => {
-    const msg = { mavpackettype: "VFR_HUD", alt: 123.4 }
-    expect(resolveSelectedValue(msg, "VFR_HUD.alt")).toBe(123.4)
-  })
-
-  it("returns undefined when the message does not carry the field", () => {
-    const msg = { mavpackettype: "VFR_HUD", alt: 123.4 }
-    expect(resolveSelectedValue(msg, "VFR_HUD.climb")).toBeUndefined()
-  })
-
-  it("does not let ATTITUDE hijack ATTITUDE_QUATERNION", () => {
-    const msg = { mavpackettype: "ATTITUDE", rollspeed: 0.5 }
-    expect(
-      resolveSelectedValue(msg, "ATTITUDE_QUATERNION.rollspeed"),
-    ).toBeUndefined()
-    expect(resolveSelectedValue(msg, "ATTITUDE.rollspeed")).toBe(0.5)
-  })
-
-  it("does not let RC_CHANNELS hijack RC_CHANNELS_RAW", () => {
-    const msg = { mavpackettype: "RC_CHANNELS", chan1_raw: 1500 }
-    expect(
-      resolveSelectedValue(msg, "RC_CHANNELS_RAW.chan1_raw"),
-    ).toBeUndefined()
-  })
-
-  it("does not let SCALED_PRESSURE hijack SCALED_PRESSURE2", () => {
-    const msg = { mavpackettype: "SCALED_PRESSURE", press_abs: 1013 }
-    expect(
-      resolveSelectedValue(msg, "SCALED_PRESSURE2.press_abs"),
-    ).toBeUndefined()
-  })
-
-  it("returns undefined for malformed selections", () => {
-    const msg = { mavpackettype: "VFR_HUD", alt: 1 }
-    expect(resolveSelectedValue(msg, "")).toBeUndefined()
-    expect(resolveSelectedValue(msg, "VFR_HUD")).toBeUndefined()
-    expect(resolveSelectedValue(msg, ".alt")).toBeUndefined()
-    expect(resolveSelectedValue(msg, "VFR_HUD.")).toBeUndefined()
-    expect(resolveSelectedValue(msg, null)).toBeUndefined()
-    expect(resolveSelectedValue(msg, undefined)).toBeUndefined()
-    expect(resolveSelectedValue(null, "VFR_HUD.alt")).toBeUndefined()
-  })
-
-  it("does not pick up inherited object properties", () => {
-    const msg = { mavpackettype: "VFR_HUD" }
-    expect(resolveSelectedValue(msg, "VFR_HUD.toString")).toBeUndefined()
   })
 })

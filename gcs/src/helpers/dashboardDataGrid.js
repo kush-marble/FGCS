@@ -182,22 +182,3 @@ export function calcValueFontSize({ cellWidth, maxFontSize, text }) {
     DATA_GRID_MAX_VALUE_FONT_PX,
   )
 }
-
-export function resolveSelectedValue(msg, currentlySelected) {
-  if (
-    typeof currentlySelected !== "string" ||
-    msg === null ||
-    msg === undefined
-  )
-    return undefined
-
-  const dot = currentlySelected.indexOf(".")
-  if (dot <= 0 || dot === currentlySelected.length - 1) return undefined
-
-  if (currentlySelected.slice(0, dot) !== msg.mavpackettype) return undefined
-
-  const field = currentlySelected.slice(dot + 1)
-  return Object.prototype.hasOwnProperty.call(msg, field)
-    ? msg[field]
-    : undefined
-}

@@ -9,27 +9,16 @@ import {
   normaliseSelectedDisplayTelemetry,
 } from "./dashboardDataGrid"
 import { defaultDataMessages } from "./dashboardDefaultDataMessages"
-import { mavlinkMsgParams } from "./mavllinkDataStreams"
+import { splitSelection } from "./mavlinkDiscovery"
 
 export const SELECTED_DISPLAY_TELEMETRY_SETTING = "selectedDisplayTelemetry"
 export const SELECTED_DISPLAY_TELEMETRY_CONFIG_VERSION = 2
 
-function splitSelection(selection) {
-  if (typeof selection !== "string") return null
-  const dot = selection.indexOf(".")
-  if (dot <= 0 || dot === selection.length - 1) return null
-  return [selection.slice(0, dot), selection.slice(dot + 1)]
-}
-
-function displayNameFor(selection) {
-  const parts = splitSelection(selection)
-  return parts === null ? undefined : parts[1]
-}
-
-function isKnownTelemetryField(selection) {
-  const parts = splitSelection(selection)
-  if (parts === null) return false
-  return mavlinkMsgParams[parts[0]]?.[parts[1]] !== undefined
+function fallbackBox(index) {
+  const fallback = defaultDataMessages[index]
+  return fallback
+    ? { ...fallback, boxId: index, value: 0 }
+    : createEmptyDataMessage(index)
 }
 
 function defaultConfig() {
@@ -86,12 +75,7 @@ export function mergeSelectedDisplayTelemetryConfigWithDefaults(
   const boxes = Array.from({ length: count }, (_, index) => {
     const persisted = rawBoxes[index]
 
-    if (!persisted) {
-      const fallback = defaultDataMessages[index]
-      return fallback
-        ? { ...fallback, boxId: index, value: 0 }
-        : createEmptyDataMessage(index)
-    }
+    if (!persisted) return fallbackBox(index)
 
     // A box the user deliberately cleared must not resurrect a default
     if (
@@ -101,21 +85,14 @@ export function mergeSelectedDisplayTelemetryConfigWithDefaults(
       return createEmptyDataMessage(index)
     }
 
-    if (!isKnownTelemetryField(persisted.currently_selected)) {
-      const fallback = defaultDataMessages[index]
-      return fallback
-        ? { ...fallback, boxId: index, value: 0 }
-        : createEmptyDataMessage(index)
-    }
+    const parts = splitSelection(persisted.currently_selected)
+    if (parts === null) return fallbackBox(index)
 
     return {
       boxId: index,
       currently_selected: persisted.currently_selected,
-      // Prefer the catalogue name so renamed fields pick up the new label
-      display_name:
-        displayNameFor(persisted.currently_selected) ??
-        persisted.display_name ??
-        "",
+      // The mavlink field name
+      display_name: parts[1],
       value: 0,
     }
   })

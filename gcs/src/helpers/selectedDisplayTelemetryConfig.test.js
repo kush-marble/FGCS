@@ -164,28 +164,51 @@ describe("mergeSelectedDisplayTelemetryConfigWithDefaults", () => {
     )
   })
 
-  it("falls back to the default when a selection left the catalogue", () => {
+  it("keeps a selection the static catalogue has never heard of", () => {
+    // Which messages exist depends on the aircraft, so a discovered selection
+    // has to survive a restart even before that aircraft is reconnected
     const merged = mergeSelectedDisplayTelemetryConfigWithDefaults({
       version: 2,
-      rows: 3,
+      rows: 1,
       cols: 2,
       boxes: [
-        persistedBox(0, "VFR_HUD.alt"),
-        persistedBox(1, "VFR_HUD.climb"),
-        persistedBox(2, "NOPE.gone"),
-        persistedBox(3, "VFR_HUD.airspeed"),
-        persistedBox(4, "VFR_HUD.throttle"),
-        persistedBox(5, "VFR_HUD.heading"),
+        persistedBox(0, "NAMED_VALUE_FLOAT.TESTVAL"),
+        persistedBox(1, "SOME_FUTURE_MSG.some_field"),
       ],
     })
-    expect(merged.boxes[2].currently_selected).toBe(
-      defaultDataMessages[2].currently_selected,
-    )
+    expect(merged.boxes.map((b) => b.currently_selected)).toEqual([
+      "NAMED_VALUE_FLOAT.TESTVAL",
+      "SOME_FUTURE_MSG.some_field",
+    ])
+    expect(merged.boxes.map((b) => b.display_name)).toEqual([
+      "TESTVAL",
+      "some_field",
+    ])
+    // Nothing is sending it yet, so it reads zero
+    expect(merged.boxes.every((b) => b.value === 0)).toBe(true)
   })
 
-  it("leaves an unknown selection beyond the defaults as an empty box", () => {
+  // An empty string is not malformed, it means a deliberately cleared box and
+  // is covered separately above
+  it.each(["nodot", ".leading", "trailing."])(
+    "falls back to the default for the malformed selection %s",
+    (selection) => {
+      const merged = mergeSelectedDisplayTelemetryConfigWithDefaults({
+        version: 2,
+        rows: 1,
+        cols: 2,
+        boxes: [persistedBox(0, selection), persistedBox(1, "VFR_HUD.alt")],
+      })
+      expect(merged.boxes[0].currently_selected).toBe(
+        defaultDataMessages[0].currently_selected,
+      )
+      expect(merged.boxes[1].currently_selected).toBe("VFR_HUD.alt")
+    },
+  )
+
+  it("leaves a malformed selection beyond the defaults as an empty box", () => {
     const boxes = Array.from({ length: 8 }, (_, i) =>
-      persistedBox(i, i === 7 ? "NOPE.gone" : knownSelection(i)),
+      persistedBox(i, i === 7 ? "nodot" : knownSelection(i)),
     )
     const merged = mergeSelectedDisplayTelemetryConfigWithDefaults({
       version: 2,

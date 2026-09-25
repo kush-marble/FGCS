@@ -35,7 +35,6 @@ import {
 
 // socket factory
 import { CHECKLIST_AUTO_BINDINGS } from "../../helpers/checklistAutoBindings"
-import { resolveSelectedValue } from "../../helpers/dashboardDataGrid.js"
 import { dataFormatters } from "../../helpers/dataFormatters.js"
 import { isGlobalFrameHomeCommand } from "../../helpers/filterMissions.js"
 import { readGcsSystemIdSync } from "../../helpers/gcsSystemId.js"
@@ -43,6 +42,11 @@ import {
   EKF_STATUS_WARNING_LEVEL,
   FRAME_CLASS_MAP,
 } from "../../helpers/mavlinkConstants.js"
+import {
+  recordMessage,
+  resolveSelectedValue,
+  splitSelection,
+} from "../../helpers/mavlinkDiscovery.js"
 import {
   closeLoadingNotification,
   redColor,
@@ -84,6 +88,7 @@ import {
   appendToGpsTrack,
   calculateGpsTrackHeadingThunk,
   resetGpsTrack,
+  resetSelectedDisplayTelemetryValues,
   setAttitudeData,
   setBatteryData,
   setDroneAircraftType,
@@ -117,6 +122,7 @@ import {
   setReadFileData,
   setReadFileProgress,
 } from "../slices/ftpSlice.js"
+import { discoveryCatalogUpdated } from "../slices/mavlinkDiscoverySlice.js"
 import {
   addIdToItem,
   closeDashboardMissionFetchingNotificationNoSuccessThunk,
@@ -237,6 +243,26 @@ const FtpSpecificSocketEvents = Object.freeze({
   onReadFileResult: "read_file_result",
   onReadFileProgress: "read_file_progress",
 })
+
+// The set of message names any data box is watching
+let watchedMessageNamesSource = null
+let watchedMessageNames = new Set()
+
+function getWatchedMessageNames(selectedDisplayTelemetry) {
+  if (watchedMessageNamesSource === selectedDisplayTelemetry) {
+    return watchedMessageNames
+  }
+
+  const names = new Set()
+  selectedDisplayTelemetry.forEach((dataItem) => {
+    const parts = splitSelection(dataItem.currently_selected)
+    if (parts !== null) names.add(parts[0])
+  })
+
+  watchedMessageNamesSource = selectedDisplayTelemetry
+  watchedMessageNames = names
+  return names
+}
 
 const socketMiddleware = (store) => {
   let socket
@@ -531,8 +557,7 @@ const socketMiddleware = (store) => {
 
         // Flags that the drone is connected
         socket.socket.on("connected_to_drone", (msg) => {
-          // Clear the position kept from the previous connection so nothing
-          // stale is shown as live for the aircraft we've just connected to
+          store.dispatch(resetSelectedDisplayTelemetryValues())
           store.dispatch(
             setHomePosition({
               lat: 0,
@@ -693,31 +718,43 @@ const socketMiddleware = (store) => {
 
           incomingMessageHandler(msg)
 
+          // Note what this aircraft sends so the data picker can offer it
+          if (recordMessage(msg)) {
+            store.dispatch(discoveryCatalogUpdated())
+          }
+
           // Data points on dashboard, the below code updates the value in the store when a new message
           // comes in in the type of specificData.
           const storeState = store.getState()
           if (storeState !== undefined) {
             const selectedDisplayTelemetry =
               storeState.droneInfo.selectedDisplayTelemetry
-            let hasSelectedDisplayTelemetryChange = false
 
-            const updatedSelectedDisplayTelemetry =
-              selectedDisplayTelemetry.map((dataItem) => {
-                const nextValue = resolveSelectedValue(
-                  msg,
-                  dataItem.currently_selected,
-                )
-                if (nextValue !== undefined && dataItem.value !== nextValue) {
-                  hasSelectedDisplayTelemetryChange = true
-                  return { ...dataItem, value: nextValue }
-                }
-                return dataItem
-              })
-
-            if (hasSelectedDisplayTelemetryChange) {
-              store.dispatch(
-                setSelectedDisplayTelemetry(updatedSelectedDisplayTelemetry),
+            if (
+              getWatchedMessageNames(selectedDisplayTelemetry).has(
+                msg.mavpackettype,
               )
+            ) {
+              let hasSelectedDisplayTelemetryChange = false
+
+              const updatedSelectedDisplayTelemetry =
+                selectedDisplayTelemetry.map((dataItem) => {
+                  const nextValue = resolveSelectedValue(
+                    msg,
+                    dataItem.currently_selected,
+                  )
+                  if (nextValue !== undefined && dataItem.value !== nextValue) {
+                    hasSelectedDisplayTelemetryChange = true
+                    return { ...dataItem, value: nextValue }
+                  }
+                  return dataItem
+                })
+
+              if (hasSelectedDisplayTelemetryChange) {
+                store.dispatch(
+                  setSelectedDisplayTelemetry(updatedSelectedDisplayTelemetry),
+                )
+              }
             }
           }
 

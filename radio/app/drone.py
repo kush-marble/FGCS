@@ -41,6 +41,8 @@ from app.utils import (
 LOG_LINE_LIMIT = 50000
 CONNECT_STATUS_PARAM_THROTTLE_SECS = 0.2
 
+WILDCARD_MESSAGE_LISTENER = "*"
+
 
 DATASTREAM_RATES = {
     mavutil.mavlink.MAV_DATA_STREAM_RAW_SENSORS: 1,
@@ -686,7 +688,7 @@ class Drone:
         return False
 
     def clearAllMessageListeners(self) -> None:
-        """Clears all message listeners."""
+        """Clears all message listeners, including the wildcard."""
         self.message_listeners.clear()
 
     def reserve_message_type(self, message_type: str, controller_id: str) -> bool:
@@ -844,8 +846,12 @@ class Drone:
                             # Queue full
                             pass
                 else:
-                    # Route to normal message listeners
-                    if msg_name in self.message_listeners:
+                    # Route to normal message listeners, or to the wildcard
+                    # listener when one is registered
+                    if (
+                        msg_name in self.message_listeners
+                        or WILDCARD_MESSAGE_LISTENER in self.message_listeners
+                    ):
                         self.message_queue.put([msg_name, msg])
 
     def executeMessages(self) -> None:
@@ -853,7 +859,13 @@ class Drone:
         while self.is_active.is_set():
             try:
                 q = self.message_queue.get(timeout=1)
-                self.message_listeners[q[0]](q[1])
+                # Snapshot the listener so a concurrent clear can't turn this
+                # into a KeyError between the lookup and the call
+                listener = self.message_listeners.get(
+                    q[0]
+                ) or self.message_listeners.get(WILDCARD_MESSAGE_LISTENER)
+                if listener is not None:
+                    listener(q[1])
             except Empty:
                 continue
             except KeyError as e:

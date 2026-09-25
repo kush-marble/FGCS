@@ -5,7 +5,7 @@ from typing_extensions import TypedDict
 
 import app.droneStatus as droneStatus
 from app import logger, socketio
-from app.drone import DATASTREAM_RATES
+from app.drone import DATASTREAM_RATES, WILDCARD_MESSAGE_LISTENER
 from app.utils import (
     missingParameterError,
     sendMessage,
@@ -23,25 +23,9 @@ class SetStreamRateType(TypedDict):
 
 GLOBAL_MESSAGE_LISTENERS = ["HEARTBEAT", "STATUSTEXT", "GLOBAL_POSITION_INT", "VFR_HUD"]
 
-ESC_TELEMETRY_MESSAGES = [
-    f"ESC_TELEMETRY_{start}_TO_{start + 3}" for start in range(1, 33, 4)
-]
-
 STATES_MESSAGE_LISTENERS = {
-    "dashboard": [
-        "BATTERY_STATUS",
-        "ATTITUDE",
-        "ALTITUDE",
-        "NAV_CONTROLLER_OUTPUT",
-        "SYS_STATUS",
-        "GPS_RAW_INT",
-        "GPS2_RAW",
-        "RC_CHANNELS",
-        *ESC_TELEMETRY_MESSAGES,
-        "MISSION_CURRENT",
-        "EKF_STATUS_REPORT",
-        "VIBRATION",
-    ],
+    # The dashboard forwards every message it receives
+    "dashboard": [WILDCARD_MESSAGE_LISTENER],
     "missions": [
         "NAV_CONTROLLER_OUTPUT",
     ],

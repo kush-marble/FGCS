@@ -210,6 +210,11 @@ const droneInfoSlice = createSlice({
         state.selectedDisplayTelemetry = action.payload
       }
     },
+    resetSelectedDisplayTelemetryValues: (state) => {
+      state.selectedDisplayTelemetry = state.selectedDisplayTelemetry.map(
+        (item) => ({ ...item, value: 0 }),
+      )
+    },
     setDataGridSize: (state, action) => {
       const size = clampDataGridSize(action.payload)
       state.dataGridSize = size
@@ -474,6 +479,7 @@ export const {
   soundPlayed,
   changeSelectedDisplayTelemetry,
   setSelectedDisplayTelemetry,
+  resetSelectedDisplayTelemetryValues,
   setDataGridSize,
   setDataGridConfig,
   setDroneAircraftType,

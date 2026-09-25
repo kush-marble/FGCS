@@ -1,17 +1,38 @@
-/*
-    The Modal component for connecting to the Com Port
-    Accessed through the connect button on the navbar
-*/
+import { Checkbox, Grid, Modal, TextInput } from "@mantine/core"
+import { IconSearch } from "@tabler/icons-react"
+import { useEffect, useMemo, useState } from "react"
+import { useSelector } from "react-redux"
+import { selectDiscoveryCatalog } from "../redux/slices/mavlinkDiscoverySlice.js"
 
-// Third party imports
-import { Checkbox, Grid, LoadingOverlay, Modal, Tooltip } from "@mantine/core"
-import { mavlinkMsgParams } from "../helpers/mavllinkDataStreams.js"
 export default function DashboardDataModal({
   opened,
   close,
   selectedBox,
   handleCheckboxChange,
 }) {
+  const catalog = useSelector(selectDiscoveryCatalog)
+  const [query, setQuery] = useState("")
+
+  // Reset the search each time the modal opens
+  useEffect(() => {
+    if (opened) setQuery("")
+  }, [opened])
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase()
+
+    return Object.keys(catalog)
+      .sort()
+      .flatMap((msg) => {
+        if (msg.toLowerCase().includes(q))
+          return [{ msg, fields: catalog[msg] }]
+        const fields = catalog[msg].filter((field) =>
+          field.toLowerCase().includes(q),
+        )
+        return fields.length === 0 ? [] : [{ msg, fields }]
+      })
+  }, [catalog, query])
+
   return (
     <Modal
       opened={opened}
@@ -26,45 +47,62 @@ export default function DashboardDataModal({
         blur: 3,
       }}
     >
-      {/* Loading overlay should be hidden when all possible data is collected */}
-      {!mavlinkMsgParams && (
-        <div>
-          <LoadingOverlay visible={true} />
-          <p className="text-center mt-10">Fetching data...</p>
-        </div>
+      {selectedBox?.currently_selected && (
+        <p className="mb-2 text-sm text-gray-400">
+          Currently showing{" "}
+          <span className="font-mono text-white">
+            {selectedBox.currently_selected}
+          </span>
+        </p>
       )}
-      <Grid>
-        {Object.entries(mavlinkMsgParams).map(([key, value], index) => (
-          <Grid.Col span={12} key={index}>
-            <h3 className="mb-2">{key}</h3>
-            <Grid>
-              {Object.entries(value).map(([dataKey, dataLabel]) => (
-                <Grid.Col span={2} key={dataKey}>
-                  <Tooltip label={dataLabel} withArrow>
+
+      <TextInput
+        value={query}
+        onChange={(e) => setQuery(e.currentTarget.value)}
+        placeholder="Search messages and fields"
+        leftSection={<IconSearch size={16} />}
+        data-autofocus
+        className="mb-4"
+      />
+
+      {matches.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          {Object.keys(catalog).length === 0
+            ? "Nothing has been received from the aircraft yet"
+            : "No messages or fields match that search"}
+        </p>
+      ) : (
+        <Grid>
+          {matches.map(({ msg, fields }) => (
+            <Grid.Col span={12} key={msg}>
+              <h3 className="mb-2">{msg}</h3>
+              <Grid>
+                {fields.map((field) => (
+                  <Grid.Col span={2} key={field}>
                     <Checkbox
-                      label={dataKey}
-                      id={`checkbox-${key}-${dataKey}`}
+                      label={field}
+                      id={`checkbox-${msg}-${field}`}
                       checked={
-                        selectedBox?.currently_selected ===
-                          `${key}.${dataKey}` || false
+                        selectedBox?.currently_selected === `${msg}.${field}` ||
+                        false
                       }
                       onChange={(e) =>
                         handleCheckboxChange(
-                          key,
-                          dataKey,
-                          dataLabel,
+                          msg,
+                          field,
+                          field,
                           selectedBox?.boxId,
                           e.target.checked,
                         )
                       }
                     />
-                  </Tooltip>
-                </Grid.Col>
-              ))}
-            </Grid>
-          </Grid.Col>
-        ))}
-      </Grid>
+                  </Grid.Col>
+                ))}
+              </Grid>
+            </Grid.Col>
+          ))}
+        </Grid>
+      )}
     </Modal>
   )
 }
