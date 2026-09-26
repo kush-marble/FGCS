@@ -234,6 +234,11 @@ def sendMessage(msg: Any) -> None:
         msg: The message to send
     """
     data = msg.to_dict()
+    # Byte array fields such as AUTOPILOT_VERSION.uid2 are not JSON
+    # serialisable
+    for key, value in data.items():
+        if isinstance(value, (bytes, bytearray)):
+            data[key] = list(value)
     data["timestamp"] = msg._timestamp
     socketio.emit("incoming_msg", data, namespace="/telemetry")
 

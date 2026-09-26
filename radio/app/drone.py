@@ -865,7 +865,14 @@ class Drone:
                     q[0]
                 ) or self.message_listeners.get(WILDCARD_MESSAGE_LISTENER)
                 if listener is not None:
-                    listener(q[1])
+                    try:
+                        listener(q[1])
+                    except Exception:
+                        # One bad message must not kill this thread, which would
+                        # stop every message reaching the frontend
+                        self.logger.exception(
+                            f"Message listener for {q[0]} raised, dropping the message"
+                        )
             except Empty:
                 continue
             except KeyError as e:

@@ -2,6 +2,7 @@ import time
 from typing import Any, List
 
 from app.drone import WILDCARD_MESSAGE_LISTENER
+from app.utils import sendMessage
 from flask_socketio import SocketIOTestClient
 
 # Messages the dashboard used to whitelist, so were already reaching the
@@ -109,3 +110,50 @@ def test_reserved_messages_still_reach_controllers(
     socketio_client.emit("set_multiple_params", [])
     result = socketio_client.get_received()
     assert result, "no response to a controller driven request"
+
+
+def test_sendMessage_serialises_bytearray_fields(
+    socketio_client: SocketIOTestClient, droneStatus
+) -> None:
+    """Byte array fields must not blow up the JSON encoder.
+
+    Forwarding every message means types like AUTOPILOT_VERSION, whose uid2
+    field is a bytearray, now reach the emitter.
+    """
+
+    class FakeMessage:
+        _timestamp = 1700000000.0
+
+        def to_dict(self):
+            return {
+                "mavpackettype": "FAKE_WITH_BYTES",
+                "uid2": bytearray([1, 2, 3]),
+                "raw": b"\x04\x05",
+                "count": 7,
+            }
+
+    sendMessage(FakeMessage())
+
+
+def test_executeMessages_survives_a_failing_listener(droneStatus) -> None:
+    """A listener that raises must not kill the dispatch thread"""
+    drone = droneStatus.drone
+    delivered: List[Any] = []
+
+    def explode(msg) -> None:
+        raise RuntimeError("listener blew up")
+
+    drone.addMessageListener("A_FAILING_MSG", explode)
+    drone.addMessageListener("A_LATER_MSG", delivered.append)
+    try:
+        drone.message_queue.put(["A_FAILING_MSG", "boom"])
+        drone.message_queue.put(["A_LATER_MSG", "still here"])
+
+        deadline = time.time() + 3
+        while not delivered and time.time() < deadline:
+            time.sleep(0.05)
+    finally:
+        drone.removeMessageListener("A_FAILING_MSG")
+        drone.removeMessageListener("A_LATER_MSG")
+
+    assert delivered == ["still here"], "dispatch thread stopped after a failure"
